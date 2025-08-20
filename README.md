@@ -12,7 +12,11 @@ PayChain is a minimal payment system prototype built with Go, Kafka, and a block
 - Faucet endpoint for demo balance top‑up
 - React 18 + TypeScript UI with Ant Design, Tailwind CSS, Zustand, TanStack Query, Axios
 
-### Architecture Overview
+## Demo
+[PayChain Dashboard Demo](https://github.com/user-attachments/assets/89e2ccc7-0217-4cd3-85c9-790c1467947d)
+
+
+## Architecture Overview
 
 - API (Gin):
   - POST /transfer → publish transaction to Kafka
@@ -29,7 +33,7 @@ PayChain is a minimal payment system prototype built with Go, Kafka, and a block
 - Accounts: RWMutex‑protected map with batch pre‑validation and atomic batch apply
 - Frontend: Single‑page dashboard (React) for transfer, balance, pending, blockchain
 
-### Technologies
+## Technologies
 
 - Backend
   - Go (Gin, Sarama)
@@ -47,7 +51,7 @@ PayChain is a minimal payment system prototype built with Go, Kafka, and a block
 - Containerization
   - Docker, Docker Compose
 
-### Concurrency Model (Backend)
+## Concurrency Model (Backend)
 
 - Kafka consumers run in background, pushing messages to a mutex‑protected pool
 - A dedicated goroutine performs block packing:
@@ -57,20 +61,20 @@ PayChain is a minimal payment system prototype built with Go, Kafka, and a block
   - After a solution, atomically apply the exact mined set; append block if commit succeeds
   - No mutation of block contents post‑mining (hash remains valid)
 
-### Blockchain & PoW
+## Blockchain & PoW
 
 - Block fields: Index, Timestamp, Transactions, PrevHash, Hash, Nonce
 - Hash = SHA‑256 over concatenated fields + transactions string
 - PoW difficulty: leading zeros (default 3)
 - Worker pool: each goroutine iterates nonce = start + k*workers; on first success, cancel others via context
 
-### Kafka Integration
+## Kafka Integration
 
 - Producer: async, JSON‑encodes Transaction to topic `paychain-transactions`
 - Consumer: consumer group with range rebalancing; JSON‑decodes and adds to pool; offsets are marked on consume
 - docker‑compose enables auto‑topic creation for quickstart
 
-### API Endpoints
+## API Endpoints
 
 - POST /transfer
   - Body: { "from": string, "to": string, "amount": number }
@@ -82,7 +86,7 @@ PayChain is a minimal payment system prototype built with Go, Kafka, and a block
   - Body: { "to": string, "amount": number }
   - Response: { status, user, balance }
 
-### Running with Docker Compose
+## Running with Docker Compose
 
 Prerequisites: Docker Desktop with Compose.
 
@@ -103,20 +107,7 @@ The compose file sets:
 - Backend env: `KAFKA_BROKERS=kafka:9092`
 - Frontend env (container mode): `VITE_API_BASE_URL=http://paychain:8080`
 
-### Local Development (Frontend)
-
-```
-cd frontend
-npm install
-npm run dev
-```
-
-- Development server: http://localhost:5173
-- Default base URL:
-  - Dev proxy: `/api/*` → http://localhost:18080 (configured in `vite.config.ts`)
-  - Or create `.env` with `VITE_API_BASE_URL=http://localhost:18080` to bypass proxy
-
-### Quick Test (API)
+## Quick Test (API)
 
 - Faucet (top up Alice):
 ```
@@ -140,7 +131,7 @@ GET http://localhost:18080/balance/alice
 GET http://localhost:18080/balance/bob
 ```
 
-### Notes & Caveats
+## Notes & Caveats
 
 - This is a toy blockchain for demo/education. No persistence, consensus network, or security hardening
 - Faucet is for demo only; do not enable in production
