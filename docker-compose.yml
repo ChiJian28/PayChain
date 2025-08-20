@@ -37,3 +37,14 @@ services:
     ports:
       - "18080:8080"
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      - VITE_API_BASE_URL=http://paychain:8080
+    depends_on:
+      - paychain
+    ports:
+      - "5173:80"
+
