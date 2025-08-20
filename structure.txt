@@ -1,0 +1,121 @@
+- folder structure
+    
+    ---
+    
+    # 📂 建议的项目结构
+    
+    ```
+    paychain/
+    ├── cmd/                # 程序入口
+    │   └── main.go         # 启动 API 服务 & Kafka Consumer
+    │
+    ├── internal/           # 内部业务逻辑（不对外暴露）
+    │   ├── api/            # API 层（Gin）
+    │   │   └── handlers.go # 转账、查询余额、查询区块链
+    │   │
+    │   ├── blockchain/     # 区块链逻辑
+    │   │   ├── block.go    # 区块 & 交易数据结构
+    │   │   ├── chain.go    # 区块链管理（新增区块、验证）
+    │   │   └── pow.go      # PoW 共识算法（goroutine worker pool）
+    │   │
+    │   ├── kafka/          # 消息队列封装
+    │   │   ├── producer.go # 生产者：转账请求写入 Kafka
+    │   │   └── consumer.go # 消费者：多个 goroutine 消费消息
+    │   │
+    │   ├── account/        # 用户账户 & 余额管理
+    │   │   ├── account.go  # map + Mutex 维护余额
+    │   │
+    │   └── pool/           # 交易池
+    │       └── pool.go     # PendingTransactions 并发安全管理
+    │
+    ├── pkg/                # 公共工具（可复用）
+    │   ├── logger/         # 日志工具
+    │   └── utils/          # Hash、时间戳等工具函数
+    │
+    ├── go.mod
+    └── go.sum
+    
+    ```
+    
+    ---
+    
+    # 📌 各目录职责
+    
+    ### `cmd/main.go`
+    
+    - 初始化 Gin API
+    - 初始化 Kafka Producer & Consumer
+    - 启动 goroutines（Consumer worker pool, 区块打包协程）
+    
+    ---
+    
+    ### `internal/api/handlers.go`
+    
+    - 定义 Gin 路由：
+        - `POST /transfer` → 调 Kafka Producer
+        - `GET /balance/:user` → 查账户余额
+        - `GET /blockchain` → 返回区块链
+        - `GET /pending` → 返回交易池
+    
+    ---
+    
+    ### `internal/blockchain/`
+    
+    - **block.go**
+        
+        定义 `Block` 和 `Transaction` 结构体
+        
+    - **chain.go**
+        
+        区块链数组（`[]Block`），带锁的 append、新区块验证
+        
+    - **pow.go**
+        
+        实现 **PoW 共识**：
+        
+        - Worker pool (goroutines)
+        - 并发计算 Hash
+        - 找到合法 Nonce 后取消其他协程
+    
+    ---
+    
+    ### `internal/kafka/`
+    
+    - **producer.go**
+        - `PublishTransaction(tx Transaction)`
+    - **consumer.go**
+        - 多个 goroutine 作为 Kafka 消费者
+        - 消息写入交易池
+    
+    ---
+    
+    ### `internal/account/account.go`
+    
+    - 用 `map[string]int` 存用户余额
+    - 读写操作加 `sync.RWMutex`
+    - 提供方法：
+        - `GetBalance(user string) int`
+        - `ApplyTransaction(tx Transaction) bool`
+    
+    ---
+    
+    ### `internal/pool/pool.go`
+    
+    - 保存未打包交易的 **交易池**
+    - 使用 `channel` 或 `Mutex + slice`
+    - 方法：
+        - `AddTransaction(tx Transaction)`
+        - `GetBatch(n int) []Transaction`
+    
+    ---
+    
+    ### `pkg/logger/`
+    
+    - 统一日志封装（基于 `log` 或 `zap`）
+    
+    ### `pkg/utils/`
+    
+    - `HashBlock(block Block) string`
+    - `NowUnix() int64`
+    
+    ---

@@ -1,0 +1,132 @@
+- 区块链交易
+    
+    # 📄 Requirements: 简易区块链 + 消息队列的支付系统（Kafka + Go 并发）
+    
+    ## 🎯 项目目标
+    
+    实现一个基于 **Golang** 的简化支付系统，模拟支付宝/PayPal：
+    
+    - 用户可以通过 API 发起转账请求。
+    - 转账请求会进入 **Kafka 消息队列**，实现削峰填谷。
+    - 后台服务会从队列中并发消费交易，批量打包成区块，形成区块链账本。
+    - 区块链使用 **工作量证明 (PoW)** 共识机制，保证区块合法性。
+    - 用户可以查询余额、交易记录、区块链。
+    
+    ---
+    
+    ## 🛠 技术栈
+    
+    - **语言**：Golang
+    - **Web 框架**：Gin
+    - **消息队列**：Kafka
+    - **并发编程**：goroutines + channel + WaitGroup + sync.Mutex/RWMutex
+    - **区块链**：简化版（交易池、区块结构、PoW 共识）
+    
+    ---
+    
+    ## 📂 功能模块
+    
+    ### 1. API 服务（Gin）
+    
+    提供以下 RESTful 接口：
+    
+    - `POST /transfer`
+        - 请求参数：`from, to, amount`
+        - 功能：发起转账请求，将交易写入 Kafka
+    - `GET /balance/:user`
+        - 功能：查询指定用户余额
+    - `GET /blockchain`
+        - 功能：返回完整的区块链（区块列表 + 交易）
+    - `GET /pending`
+        - 功能：返回当前交易池（未打包的交易）
+    
+    ---
+    
+    ### 2. 消息队列（Kafka）
+    
+    - Producer：
+        - API 收到 `transfer` 请求后，向 Kafka 生产一条交易消息
+    - Consumer：
+        - 后台服务使用 **多个 goroutine 并发消费 Kafka 消息**
+        - 每个消费协程将交易写入本地 `PendingTransactions`（交易池）
+        - 为避免竞态条件，交易池使用 **channel** 或 **sync.Mutex** 保护
+    
+    ---
+    
+    ### 3. 区块链模块
+    
+    ### 数据结构
+    
+    ```go
+    type Transaction struct {
+        From   string
+        To     string
+        Amount int
+        Time   int64
+    }
+    
+    type Block struct {
+        Index        int
+        Timestamp    int64
+        Transactions []Transaction
+        PrevHash     string
+        Hash         string
+        Nonce        int
+    }
+    
+    ```
+    
+    ### 功能需求
+    
+    - **创建区块**：当交易池达到一定大小（例如 3 笔交易），打包成新区块
+    - **PoW 共识**：
+        - 使用 **goroutine 并发计算 Nonce**（可以开 N 个 worker 协程同时尝试不同范围的 Nonce）
+        - 任何一个 worker 找到合法哈希后，其他 worker 停止工作
+    - **验证区块**：检查 `PrevHash` 与前一个区块一致
+    - **区块链存储**：全局 `[]Block`（需用 Mutex 保护写操作）
+    
+    ---
+    
+    ### 4. 账户 & 余额管理
+    
+    - 用 `map[string]int` 维护账户余额
+    - **并发安全**：所有读写操作必须用 `sync.RWMutex`
+    - 交易打包时检查：
+        - 转出账户余额 ≥ 金额 → 允许
+        - 否则丢弃交易
+    
+    ---
+    
+    ## 🔄 运行流程
+    
+    1. 用户调用 `POST /transfer` → 交易进入 Kafka
+    2. 后台多个 Kafka Consumer goroutine 并发消费消息，写入交易池
+    3. 当交易池达到阈值（例如 3 笔交易） → 触发新区块生成
+    4. 使用多个 goroutine 并发执行 PoW，找到符合条件的 Nonce
+    5. 新区块加入区块链（写操作加 Mutex 保证原子性）
+    6. 更新账户余额（写操作加 Mutex）
+    7. 用户可通过 API 查询余额、区块链、交易池
+    
+    ---
+    
+    ## 📌 并发编程要求（必须实现）
+    
+    1. **Kafka 消费**：
+        - 使用多个 goroutine 并发消费消息，提高吞吐量。
+        - 保证交易池并发安全（用 channel 或 Mutex）。
+    2. **区块打包**：
+        - 区块生成过程异步运行（单独 goroutine），不阻塞 API 请求。
+    3. **PoW 挖矿**：
+        - 使用 worker pool（多个 goroutine 并发搜索 Nonce），加速哈希计算。
+    4. **数据结构并发安全**：
+        - 区块链（`[]Block`）和账户余额 map 必须加锁保护。
+    
+    ---
+    
+    ## ✅ 交付成果
+    
+    1. **Golang 项目**（模块化，含注释）
+    2. **Kafka 集成**（Producer + 多个 Consumer 并发处理）
+    3. **Gin API**（转账、查询余额、查询区块链）
+    4. **并发优化**（goroutine + channel + Mutex）
+    5. **最小可运行 demo**（转账请求 → Kafka → 区块链 → 查询余额）
