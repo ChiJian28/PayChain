@@ -17,6 +17,11 @@ type transferReq struct {
 	Amount int    `json:"amount"`
 }
 
+type faucetReq struct {
+	To     string `json:"to"`
+	Amount int    `json:"amount"`
+}
+
 func RegisterRoutes(r *gin.Engine, prod *kafka.Producer, acct *account.Store, chain *blockchain.Chain, pool *txpool.Pool) {
 	r.POST("/transfer", func(c *gin.Context) {
 		var req transferReq
@@ -30,6 +35,21 @@ func RegisterRoutes(r *gin.Engine, prod *kafka.Producer, acct *account.Store, ch
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"status": "queued"})
+	})
+
+	r.POST("/faucet", func(c *gin.Context) {
+		var req faucetReq
+		if err := c.ShouldBindJSON(&req); err != nil || req.Amount <= 0 || req.To == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+		// Mint by applying a transaction from empty sender
+		tx := blockchain.Transaction{From: "", To: req.To, Amount: req.Amount, Time: utils.NowUnix()}
+		if ok := acct.ApplyTransaction(tx); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "apply failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "user": req.To, "balance": acct.GetBalance(req.To)})
 	})
 
 	r.GET("/balance/:user", func(c *gin.Context) {
