@@ -77,15 +77,23 @@ func main() {
 				continue
 			}
 
+			// pre-validate transactions against account snapshot
+			validTxs := acct.FilterApplicableTransactions(batch)
+			if len(validTxs) == 0 {
+				// no valid txs to mine, skip this round
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+
 			last := chain.LastBlock()
 			candidate := blockchain.Block{
 				Index:        last.Index + 1,
 				Timestamp:    utils.NowUnix(),
-				Transactions: batch,
+				Transactions: validTxs,
 				PrevHash:     last.Hash,
 			}
 
-			// Mine with cancelable context
+			// Mine with cancelable context on the pre-validated tx set
 			mineCtx, mineCancel := context.WithCancel(ctx)
 			mined, ok := blockchain.MineBlock(mineCtx, candidate, difficulty)
 			mineCancel()
@@ -93,17 +101,15 @@ func main() {
 				continue
 			}
 
-			// apply transactions to accounts
-			applied := make([]blockchain.Transaction, 0, len(mined.Transactions))
-			for _, tx := range mined.Transactions {
-				if acct.ApplyTransaction(tx) {
-					applied = append(applied, tx)
-				}
+			// atomically apply exactly the mined tx set; only append block if committed
+			if !acct.ApplyBatchIfValid(validTxs) {
+				// balances changed during mining; drop and retry next round
+				logger.Errorf("apply batch failed due to balance change; dropping mined block %d", candidate.Index)
+				continue
 			}
-			mined.Transactions = applied
-			mined.Hash = blockchain.ComputeBlockHash(mined)
+			// mined already contains correct hash for the pre-validated txs; append as-is
 			chain.Append(mined)
-			logger.Infof("new block %d, tx=%d, hash=%s", mined.Index, len(applied), mined.Hash)
+			logger.Infof("new block %d, tx=%d, hash=%s", mined.Index, len(validTxs), mined.Hash)
 		}
 	}()
 
