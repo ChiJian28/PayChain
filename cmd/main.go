@@ -16,6 +16,7 @@ import (
 	"paychain/pkg/utils"
 
 	"github.com/gin-gonic/gin"
+    "strings"
 )
 
 func main() {
@@ -33,7 +34,11 @@ func main() {
 	acct.ApplyTransaction(blockchain.Transaction{From: "", To: "bob", Amount: 1000, Time: utils.NowUnix()})
 
 	// Kafka
-	brokers := []string{"localhost:9092"}
+	brokerEnv := os.Getenv("KAFKA_BROKERS")
+	if brokerEnv == "" {
+		brokerEnv = "localhost:9092"
+	}
+	brokers := strings.Split(brokerEnv, ",")
 	topic := "paychain-transactions"
 	prod, err := kafka.NewProducer(brokers, topic)
 	if err != nil {
