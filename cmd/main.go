@@ -76,11 +76,12 @@ func main() {
 			default:
 			}
 
-			batch := pool.GetBatch(batchSize)
-			if len(batch) == 0 {
+			// 只有当交易池里达到 batchSize 才打包挖矿
+			if pool.Size() < batchSize {
 				time.Sleep(200 * time.Millisecond)
 				continue
 			}
+			batch := pool.GetBatch(batchSize)
 
 			// pre-validate transactions against account snapshot
 			validTxs := acct.FilterApplicableTransactions(batch)
